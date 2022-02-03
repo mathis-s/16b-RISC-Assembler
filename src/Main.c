@@ -235,7 +235,7 @@ void CheckCondJumpLengths(char* code, size_t codeLen)
                     if (!TryParseLiteral(code, &i, codeLen, &literal, &literalSet))
                         ExitWithError("Invalid jump");
 
-                    int16_t delta = literal - (instrNum + 1);
+                    int32_t delta = (int32_t)literal - ((int32_t)instrNum + 1);
                     if (delta > 0xFF || delta < -0xFF)
                         GenericList_ForAll(&labels, IncrementAllLabelsLargerThan, &instrNum);
                 }
@@ -369,6 +369,7 @@ uint32_t ParseInstruction(char* code, size_t* i, size_t codeLen, uint16_t* instr
     // Tiny hack to allow pseudo-instructions that consist of two real instructions
     if (followingInstructionSet)
     {
+        (*instrAddr)++;
         followingInstructionSet = false;
         return followingInstruction;
     }
@@ -415,12 +416,18 @@ uint32_t ParseInstruction(char* code, size_t* i, size_t codeLen, uint16_t* instr
 
         if (cond != 0 && literal > 0xFF)
         {
+            // Pseudo instruction expands to two instructions,
+            // so jump delta changes
+            delta -= 1;
+            literal = (delta < 0) ? -delta : delta;
+
             followingInstructionSet = true;
             followingInstruction = AssembleInstruction(literal, Dst_IP, 0, delta < 0 ? OPCode_SUB : OPCode_ADD, 0,
                                                        Source_LIT16, Source_IP);
 
             cond = InvertCond(cond);
             literal = 1;
+            delta = 1;
         }
 
         if (delta > 0)
